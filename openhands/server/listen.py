@@ -33,6 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
+from fastapi_socketio import SocketManager
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -79,11 +80,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['http://localhost:3001', 'http://127.0.0.1:3001'],
+    allow_origins=['http://localhost:*', 'http://127.0.0.1:*'],
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],
 )
+socket_manager = SocketManager(app=app)
 
 
 class NoCacheMiddleware(BaseHTTPMiddleware):
@@ -252,6 +254,22 @@ async def attach_session(request: Request, call_next):
     finally:
         await session_manager.detach_from_conversation(request.state.conversation)
     return response
+
+
+@app.sio.on('connect')
+async def handle_connect(sid, environ):
+    print('Client connected:', sid)
+
+
+@app.sio.on('disconnect')
+async def handle_disconnect(sid):
+    print('Client disconnected:', sid)
+
+
+@app.sio.on('message')
+async def handle_message(sid, data):
+    print('Received message:', data)
+    await app.sio.emit('response', {'message': 'Hello from server!'}, to=sid)
 
 
 @app.websocket('/ws')
