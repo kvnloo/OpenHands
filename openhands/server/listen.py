@@ -8,6 +8,8 @@ import warnings
 from contextlib import asynccontextmanager
 
 import requests
+import socketio
+from fastapi.exceptions import RequestValidationError
 from pathspec import PathSpec
 from pathspec.patterns import GitWildMatchPattern
 
@@ -32,7 +34,6 @@ from fastapi import (
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
-from fastapi_socketio import SocketManager
 from pydantic import BaseModel
 
 import openhands.agenthub  # noqa F401 (we import this to get the agents registered)
@@ -83,9 +84,6 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
-socket_manager = SocketManager(app=app)
-
-
 app.add_middleware(NoCacheMiddleware)
 
 security_scheme = HTTPBearer()
@@ -191,6 +189,7 @@ async def attach_session(request: Request, call_next):
         '/api/options/',
         '/api/github/callback',
         '/api/authenticate',
+        '/socket.io/',
     ]
     if any(
         request.url.path.startswith(path) for path in non_authed_paths
@@ -236,22 +235,6 @@ async def attach_session(request: Request, call_next):
     finally:
         await session_manager.detach_from_conversation(request.state.conversation)
     return response
-
-
-@app.sio.on('connect')
-async def handle_connect(sid, environ):
-    print('Client connected:', sid)
-
-
-@app.sio.on('disconnect')
-async def handle_disconnect(sid):
-    print('Client disconnected:', sid)
-
-
-@app.sio.on('message')
-async def handle_message(sid, data):
-    print('Received message:', data)
-    await app.sio.emit('response', {'message': 'Hello from server!'}, to=sid)
 
 
 @app.websocket('/ws')
@@ -869,3 +852,70 @@ class SPAStaticFiles(StaticFiles):
 
 
 app.mount('/', SPAStaticFiles(directory='./frontend/build', html=True), name='dist')
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    exc_str = f'{exc}'.replace('\n', ' ').replace('   ', ' ')
+    # or logger.error(f'{exc}')
+    print(exc_str)
+    content = {'status_code': 10422, 'message': exc_str, 'data': None}
+    return JSONResponse(
+        content=content, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY
+    )
+
+
+sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
+app = socketio.ASGIApp(sio, other_asgi_app=app)
+
+
+@sio.event
+def connect(sid, environ):
+    print('connect ', sid)
+    """
+    if websocket.query_params.get('token'):
+        token = websocket.query_params.get('token')
+        sid = get_sid_from_token(token, config.jwt_secret)
+
+        if sid == '':
+            await websocket.send_json({'error': 'Invalid token', 'error_code': 401})
+            await websocket.close()
+            return
+    else:
+        sid = str(uuid.uuid4())
+        token = sign_token({'sid': sid}, config.jwt_secret)
+
+    logger.info(f'New session: {sid}')
+    session = session_manager.add_or_restart_session(sid, websocket)
+    await websocket.send_json({'token': token, 'status': 'ok'})
+
+    latest_event_id = -1
+    if websocket.query_params.get('latest_event_id'):
+        latest_event_id = int(websocket.query_params.get('latest_event_id'))
+    for event in session.agent_session.event_stream.get_events(
+        start_id=latest_event_id + 1
+    ):
+        if isinstance(
+            event,
+            (
+                NullAction,
+                NullObservation,
+                ChangeAgentStateAction,
+                AgentStateChangedObservation,
+            ),
+        ):
+            continue
+        await websocket.send_json(event_to_dict(event))
+
+    await session.loop_recv()
+    """
+
+
+@sio.event
+async def oh_action(sid, data):
+    print('message ', data)
+
+
+@sio.event
+def disconnect(sid):
+    print('disconnect ', sid)
