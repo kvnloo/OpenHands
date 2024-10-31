@@ -6,6 +6,7 @@ import tempfile
 import uuid
 import warnings
 from contextlib import asynccontextmanager
+from urllib import parse
 
 import requests
 import socketio
@@ -870,28 +871,21 @@ app = socketio.ASGIApp(sio, other_asgi_app=app)
 
 
 @sio.event
-def connect(sid, environ):
-    print('connect ', sid)
-    """
-    if websocket.query_params.get('token'):
-        token = websocket.query_params.get('token')
-        sid = get_sid_from_token(token, config.jwt_secret)
+async def connect(sid, environ):
+    query_string = environ.get('QUERY_STRING')
+    params = parse.parse_qs(query_string)
+    # We have a unique, safe session id...
+    session = session_manager.add_or_restart_sio_session(sid, sio)
 
-        if sid == '':
-            await websocket.send_json({'error': 'Invalid token', 'error_code': 401})
-            await websocket.close()
-            return
-    else:
-        sid = str(uuid.uuid4())
-        token = sign_token({'sid': sid}, config.jwt_secret)
-
-    logger.info(f'New session: {sid}')
-    session = session_manager.add_or_restart_session(sid, websocket)
-    await websocket.send_json({'token': token, 'status': 'ok'})
+    # This seems kind of unnescessary - the client already has this.
+    # In the old code, sometimes this value was generated - I wonder is the SID distinctive enough to
+    # be cryptographically secure?
+    token = params.get('token')
+    await sio.emit('oh_event', {'token': token, 'status': 'ok'}, to=sid)
 
     latest_event_id = -1
-    if websocket.query_params.get('latest_event_id'):
-        latest_event_id = int(websocket.query_params.get('latest_event_id'))
+    if params.get('latest_event_id'):
+        latest_event_id = int(params.get('latest_event_id')[0])  # type: ignore
     for event in session.agent_session.event_stream.get_events(
         start_id=latest_event_id + 1
     ):
@@ -905,17 +899,17 @@ def connect(sid, environ):
             ),
         ):
             continue
-        await websocket.send_json(event_to_dict(event))
-
-    await session.loop_recv()
-    """
+        await sio.emit('oh_event', event_to_dict(event), to=sid)
 
 
 @sio.event
 async def oh_action(sid, data):
-    print('message ', data)
+    sio_session = session_manager.get_sio_sesion(sid)
+    if sio_session is None:
+        raise ValueError(f'no_such_sid:{sid}')
+    sio_session.on_recv(data)
 
 
 @sio.event
 def disconnect(sid):
-    print('disconnect ', sid)
+    logger.info('Disconnected:#{sid}')

@@ -3,6 +3,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+import socketio
 from fastapi import WebSocket
 
 from openhands.core.config import AppConfig
@@ -11,6 +12,7 @@ from openhands.events.stream import session_exists
 from openhands.runtime.utils.shutdown_listener import should_continue
 from openhands.server.session.conversation import Conversation
 from openhands.server.session.session import Session
+from openhands.server.session.socketio_session import SocketIOSession
 from openhands.storage.files import FileStore
 
 
@@ -20,7 +22,9 @@ class SessionManager:
     file_store: FileStore
     cleanup_interval: int = 300
     session_timeout: int = 600
+    # TODO: As soon as we have transitioned over to SocketIO, we will delete sessions and everything related to it.
     _sessions: dict[str, Session] = field(default_factory=dict)
+    _sio_sessions: dict[str, SocketIOSession] = field(default_factory=dict)
     _session_cleanup_task: Optional[asyncio.Task] = None
 
     async def __aenter__(self):
@@ -41,10 +45,21 @@ class SessionManager:
         )
         return self._sessions[sid]
 
+    def add_or_restart_sio_session(
+        self, sid: str, sio: socketio.AsyncServer
+    ) -> Session:
+        if sid in self._sessions:
+            asyncio.create_task(self._sessions[sid].close())
+        self._sio_sessions[sid] = SocketIOSession(
+            sid=sid, file_store=self.file_store, sio=sio, config=self.config
+        )
+        return self._sessions[sid]
+
     def get_session(self, sid: str) -> Session | None:
-        if sid not in self._sessions:
-            return None
         return self._sessions.get(sid)
+
+    def get_sio_sesion(self, sid: str) -> SocketIOSession | None:
+        return self._sio_sessions.get(sid)
 
     async def attach_to_conversation(self, sid: str) -> Conversation | None:
         if not session_exists(sid, self.file_store):
@@ -75,21 +90,22 @@ class SessionManager:
     async def _cleanup_sessions(self):
         while should_continue():
             current_time = time.time()
-            session_ids_to_remove = []
-            for sid, session in list(self._sessions.items()):
-                # if session inactive for a long time, remove it
-                if (
-                    not session.is_alive
-                    and current_time - session.last_active_ts > self.session_timeout
-                ):
-                    session_ids_to_remove.append(sid)
+            for sessions in (self._sessions, self._sio_sessions):
+                session_ids_to_remove = []
+                for sid, session in list(sessions.items()):  # type: ignore
+                    # if session inactive for a long time, remove it
+                    if (
+                        not session.is_alive
+                        and current_time - session.last_active_ts > self.session_timeout
+                    ):
+                        session_ids_to_remove.append(sid)
 
-            for sid in session_ids_to_remove:
-                to_del_session: Session | None = self._sessions.pop(sid, None)
-                if to_del_session is not None:
-                    await to_del_session.close()
-                    logger.debug(
-                        f'Session {sid} and related resource have been removed due to inactivity.'
-                    )
+                for sid in session_ids_to_remove:
+                    to_del_session: Session | None = self._sessions.pop(sid, None)
+                    if to_del_session is not None:
+                        await to_del_session.close()
+                        logger.debug(
+                            f'Session {sid} and related resource have been removed due to inactivity.'
+                        )
 
             await asyncio.sleep(self.cleanup_interval)
