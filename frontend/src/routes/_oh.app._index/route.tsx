@@ -6,7 +6,7 @@ import { RootState } from "#/store";
 import AgentState from "#/types/AgentState";
 import FileExplorer from "#/components/file-explorer/FileExplorer";
 import OpenHands from "#/api/open-hands";
-import { useSocket } from "#/context/socket";
+import { useSocketIO } from "#/context/socketIO";
 import CodeEditorCompoonent from "./code-editor-component";
 import { useFiles } from "#/context/files";
 import { EditorActions } from "#/components/editor-actions";
@@ -29,7 +29,7 @@ export function ErrorBoundary() {
 
 function CodeEditor() {
   const { token } = useLoaderData<typeof clientLoader>();
-  const { runtimeActive } = useSocket();
+  const { runtimeActive } = useSocketIO();
   const {
     setPaths,
     selectedPath,

@@ -5,7 +5,7 @@ import EllipsisH from "#/assets/ellipsis-h.svg?react";
 import { ModalBackdrop } from "../modals/modal-backdrop";
 import { ConnectToGitHubModal } from "../modals/connect-to-github-modal";
 import { addUserMessage } from "#/state/chatSlice";
-import { useSocket } from "#/context/socket";
+import { useSocketIO } from "#/context/socketIO";
 import { createChatMessage } from "#/services/chatService";
 import { ProjectMenuCardContextMenu } from "./project.menu-card-context-menu";
 import { ProjectMenuDetailsPlaceholder } from "./project-menu-details-placeholder";
@@ -25,7 +25,7 @@ export function ProjectMenuCard({
   isConnectedToGitHub,
   githubData,
 }: ProjectMenuCardProps) {
-  const { send } = useSocket();
+  const { send } = useSocketIO();
   const dispatch = useDispatch();
 
   const [contextMenuIsOpen, setContextMenuIsOpen] = React.useState(false);

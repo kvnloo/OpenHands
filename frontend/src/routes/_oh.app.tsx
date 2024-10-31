@@ -24,7 +24,7 @@ import {
   addUserMessage,
   clearMessages,
 } from "#/state/chatSlice";
-import { useSocket } from "#/context/socket";
+import { useSocketIO } from "#/context/socketIO";
 import {
   getGitHubTokenCommand,
   getCloneRepoCommand,
@@ -127,7 +127,7 @@ function App() {
   const { files, importedProjectZip } = useSelector(
     (state: RootState) => state.initalQuery,
   );
-  const { start, send, setRuntimeIsInitialized, runtimeActive } = useSocket();
+  const { start, send, setRuntimeIsInitialized, runtimeActive } = useSocketIO();
   const { settings, token, ghToken, repo, q, lastCommit } =
     useLoaderData<typeof clientLoader>();
   const fetcher = useFetcher();
@@ -174,7 +174,7 @@ function App() {
       action: ActionType.INIT,
       args: settings,
     };
-    send(JSON.stringify(initEvent));
+    send(initEvent);
 
     // display query in UI, but don't send it to the server
     if (q) addIntialQueryToChat(q, files);
@@ -196,40 +196,39 @@ function App() {
   };
 
   const handleMessage = React.useCallback(
-    (message: MessageEvent<WebSocket.Data>) => {
+    (data: any) => {
       // set token received from the server
-      const parsed = JSON.parse(message.data.toString());
-      if ("token" in parsed) {
-        fetcher.submit({ token: parsed.token }, { method: "post" });
+      if ("token" in data) {
+        fetcher.submit({ token: data.token }, { method: "post" });
         return;
       }
 
-      if (isServerError(parsed)) {
-        if (parsed.error_code === 401) {
+      if (isServerError(data)) {
+        if (data.error_code === 401) {
           toast.error("Session expired.");
           fetcher.submit({}, { method: "POST", action: "/end-session" });
           return;
         }
 
-        if (typeof parsed.error === "string") {
-          toast.error(parsed.error);
+        if (typeof data.error === "string") {
+          toast.error(data.error);
         } else {
-          toast.error(parsed.message);
+          toast.error(data.message);
         }
 
         return;
       }
-      if (isErrorObservation(parsed)) {
-        handleError(parsed.message);
+      if (isErrorObservation(data)) {
+        handleError(data.message);
         return;
       }
 
-      handleAssistantMessage(message.data.toString());
+      handleAssistantMessage(data.toString());
 
       // handle first time connection
       if (
-        isAgentStateChange(parsed) &&
-        parsed.extras.agent_state === AgentState.INIT
+        isAgentStateChange(data) &&
+        data.extras.agent_state === AgentState.INIT
       ) {
         setRuntimeIsInitialized();
 

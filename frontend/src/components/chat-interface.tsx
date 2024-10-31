@@ -1,7 +1,7 @@
 import { useDispatch, useSelector } from "react-redux";
 import React from "react";
 import { useFetcher } from "@remix-run/react";
-import { useSocket } from "#/context/socket";
+import { useSocketIO } from "#/context/socketIO";
 import { convertImageToBase64 } from "#/utils/convert-image-to-base-64";
 import { ChatMessage } from "./chat-message";
 import { FeedbackActions } from "./feedback-actions";
@@ -31,7 +31,7 @@ const isErrorMessage = (
 ): message is ErrorMessage => "error" in message;
 
 export function ChatInterface() {
-  const { send, events } = useSocket();
+  const { send, events } = useSocketIO();
   const dispatch = useDispatch();
   const fetcher = useFetcher<typeof clientAction>({ key: "feedback" });
   const scrollRef = React.useRef<HTMLDivElement>(null);

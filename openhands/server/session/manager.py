@@ -47,18 +47,18 @@ class SessionManager:
 
     def add_or_restart_sio_session(
         self, sid: str, sio: socketio.AsyncServer
-    ) -> Session:
+    ) -> SocketIOSession:
         if sid in self._sessions:
             asyncio.create_task(self._sessions[sid].close())
         self._sio_sessions[sid] = SocketIOSession(
             sid=sid, file_store=self.file_store, sio=sio, config=self.config
         )
-        return self._sessions[sid]
+        return self._sio_sessions[sid]
 
     def get_session(self, sid: str) -> Session | None:
         return self._sessions.get(sid)
 
-    def get_sio_sesion(self, sid: str) -> SocketIOSession | None:
+    def get_sio_session(self, sid: str) -> SocketIOSession | None:
         return self._sio_sessions.get(sid)
 
     async def attach_to_conversation(self, sid: str) -> Conversation | None:

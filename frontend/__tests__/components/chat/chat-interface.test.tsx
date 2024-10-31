@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ChatInterface } from "#/components/chat-interface";
-import { SocketProvider } from "#/context/socket";
+import { SocketIOProvider } from "#/context/socketIO";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const renderChatInterface = (messages: (Message | ErrorMessage)[]) =>
-  render(<ChatInterface />, { wrapper: SocketProvider });
+  render(<ChatInterface />, { wrapper: SocketIOProvider });
 
 describe.skip("ChatInterface", () => {
   afterEach(() => {

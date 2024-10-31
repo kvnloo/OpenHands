@@ -18,7 +18,7 @@ import { DangerModal } from "#/components/modals/confirmation-modals/danger-moda
 import { LoadingSpinner } from "#/components/modals/LoadingProject";
 import { ModalBackdrop } from "#/components/modals/modal-backdrop";
 import { UserActions } from "#/components/user-actions";
-import { useSocket } from "#/context/socket";
+import { useSocketIO } from "#/context/socketIO";
 import i18n from "#/i18n";
 import { getSettings, settingsAreUpToDate } from "#/services/settings";
 import AllHandsLogo from "#/assets/branding/all-hands-logo.svg?react";
@@ -98,7 +98,7 @@ type SettingsFormData = {
 };
 
 export default function MainApp() {
-  const { stop, isConnected } = useSocket();
+  const { stop, isConnected } = useSocketIO();
   const navigation = useNavigation();
   const location = useLocation();
   const { token, user, settingsIsUpdated, settings } =

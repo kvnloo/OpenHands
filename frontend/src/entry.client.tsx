@@ -9,7 +9,7 @@ import { RemixBrowser } from "@remix-run/react";
 import { startTransition, StrictMode } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { Provider } from "react-redux";
-import { SocketProvider } from "./context/socket";
+import { SocketIOProvider } from "./context/socketIO";
 import "./i18n";
 import store from "./store";
 
@@ -31,11 +31,11 @@ prepareApp().then(() =>
     hydrateRoot(
       document,
       <StrictMode>
-        <SocketProvider>
+        <SocketIOProvider>
           <Provider store={store}>
             <RemixBrowser />
           </Provider>
-        </SocketProvider>
+        </SocketIOProvider>
       </StrictMode>,
     );
   }),

@@ -904,7 +904,7 @@ async def connect(sid, environ):
 
 @sio.event
 async def oh_action(sid, data):
-    sio_session = session_manager.get_sio_sesion(sid)
+    sio_session = session_manager.get_sio_session(sid)
     if sio_session is None:
         raise ValueError(f'no_such_sid:{sid}')
     sio_session.on_recv(data)
