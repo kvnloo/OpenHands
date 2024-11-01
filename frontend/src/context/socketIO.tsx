@@ -101,7 +101,7 @@ function SocketIOProvider({ children }: SocketProviderProps) {
         return;
       }
       setEvents((prevEvents) => [...prevEvents, data]);
-      sioRef.current.emit("oh_event", data);
+      sioRef.current.emit("oh_action", data);
     },
     [],
   );

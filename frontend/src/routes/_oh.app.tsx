@@ -228,7 +228,7 @@ function App() {
         return;
       }
 
-      handleAssistantMessage(data.toString());
+      handleAssistantMessage(data);
 
       // handle first time connection
       if (

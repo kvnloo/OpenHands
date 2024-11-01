@@ -43,6 +43,7 @@ class SocketIOSession:
         file_store: FileStore,
     ):
         self.sid = sid
+        self.sio = sio
         self.last_active_ts = int(time.time())
         self.agent_session = AgentSession(sid, file_store)
         self.agent_session.event_stream.subscribe(
@@ -71,12 +72,19 @@ class SocketIOSession:
             return
         if event.source == EventSource.AGENT:
             await self.send(event_to_dict(event))
-        elif event.source == EventSource.USER and isinstance(
-            event, CmdOutputObservation
+        # NOTE: ipython observations are not sent here currently
+        elif event.source == EventSource.ENVIRONMENT and isinstance(
+            event, (CmdOutputObservation, AgentStateChangedObservation)
         ):
-            await self.send(event_to_dict(event))
+            # feedback from the environment to agent actions is understood as agent events by the UI
+            event_dict = event_to_dict(event)
+            event_dict['source'] = EventSource.AGENT
+            await self.send(event_dict)
         elif isinstance(event, ErrorObservation):
-            await self.send(event_to_dict(event))
+            # send error events as agent events to the UI
+            event_dict = event_to_dict(event)
+            event_dict['source'] = EventSource.AGENT
+            await self.send(event_dict)
 
     async def dispatch(self, data: dict):
         action = data.get('action', '')

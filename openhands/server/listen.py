@@ -934,9 +934,9 @@ async def oh_action(sid, data):
     sio_session = session_manager.get_sio_session(sid)
     if sio_session is None:
         raise ValueError(f'no_such_sid:{sid}')
-    sio_session.on_recv(data)
+    await sio_session.on_recv(data)
 
 
 @sio.event
 def disconnect(sid):
-    logger.info('Disconnected:#{sid}')
+    logger.info(f'Disconnected:#{sid}')
