@@ -73,10 +73,15 @@ const isAgentStateChange = (
 export const clientLoader = async () => {
   const ghToken = localStorage.getItem("ghToken");
 
-  const isAuthed = await userIsAuthenticated(ghToken);
-  if (!isAuthed) {
+  try {
+    const isAuthed = await userIsAuthenticated(ghToken);
+    if (!isAuthed) {
+      clearSession();
+      return redirect("/");
+    }
+  } catch (error) {
     clearSession();
-    return redirect("/waitlist");
+    return redirect("/");
   }
 
   const q = store.getState().initalQuery.initialQuery;
@@ -309,7 +314,7 @@ function App() {
   return (
     <div className="flex flex-col h-full gap-3">
       <div className="flex h-full overflow-auto gap-3">
-        <Container className="w-[375px] max-h-full">
+        <Container className="w-[390px] max-h-full">
           <ChatInterface />
         </Container>
 
