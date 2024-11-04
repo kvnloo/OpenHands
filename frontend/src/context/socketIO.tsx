@@ -2,7 +2,6 @@ import React from "react";
 import { Data } from "ws";
 import { io, Socket } from "socket.io-client";
 import EventLogger from "#/utils/event-logger";
-import { getValidFallbackHost } from "#/utils/get-valid-fallback-host";
 
 interface SocketIOClientOptions {
   token: string | null;
@@ -47,8 +46,12 @@ function SocketIOProvider({ children }: SocketProviderProps) {
       );
     }
 
-    const fallback = getValidFallbackHost();
-    const baseUrl = import.meta.env.VITE_BACKEND_BASE_URL || fallback;
+    const baseUrl =
+      import.meta.env.VITE_BACKEND_BASE_URL || window?.location.host;
+    // const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const sessionToken = options?.token || "NO_JWT"; // not allowed to be empty or duplicated
+    const ghToken = localStorage.getItem("ghToken") || "NO_GITHUB";
+
     const sio = io(
       `${window.location.protocol}//${baseUrl}${options?.token ? `?token=${options.token}` : ""}`,
       {
@@ -135,7 +138,7 @@ function SocketIOProvider({ children }: SocketProviderProps) {
 function useSocketIO() {
   const context = React.useContext(SocketIOContext);
   if (context === undefined) {
-    throw new Error("useSocketIO must be used within a SocketProvider");
+    throw new Error("useSocketIO must be used within a SocketIOProvider");
   }
   return context;
 }

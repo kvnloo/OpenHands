@@ -10,7 +10,6 @@ import {
   redirect,
 } from "@remix-run/react";
 import { useDispatch, useSelector } from "react-redux";
-import WebSocket from "ws";
 import toast from "react-hot-toast";
 import { getSettings } from "#/services/settings";
 import Security from "../components/modals/security/Security";
@@ -72,9 +71,8 @@ const isAgentStateChange = (
 
 export const clientLoader = async () => {
   const ghToken = localStorage.getItem("ghToken");
-
   try {
-    const isAuthed = await userIsAuthenticated(ghToken);
+    const isAuthed = await userIsAuthenticated();
     if (!isAuthed) {
       clearSession();
       return redirect("/");
@@ -289,21 +287,21 @@ function App() {
 
   React.useEffect(() => {
     (async () => {
-      if (runtimeActive && token && importedProjectZip) {
+      if (runtimeActive && importedProjectZip) {
         // upload files action
         try {
           const blob = base64ToBlob(importedProjectZip);
           const file = new File([blob], "imported-project.zip", {
             type: blob.type,
           });
-          await OpenHands.uploadFiles(token, [file]);
+          await OpenHands.uploadFiles([file]);
           dispatch(setImportedProjectZip(null));
         } catch (error) {
           toast.error("Failed to upload project files.");
         }
       }
     })();
-  }, [runtimeActive, token, importedProjectZip]);
+  }, [runtimeActive, importedProjectZip]);
 
   const {
     isOpen: securityModalIsOpen,
