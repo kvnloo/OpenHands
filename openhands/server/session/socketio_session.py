@@ -1,5 +1,6 @@
 import asyncio
 import time
+from uuid import uuid4
 
 import socketio
 
@@ -47,7 +48,7 @@ class SocketIOSession:
         self.last_active_ts = int(time.time())
         self.agent_session = AgentSession(sid, file_store)
         self.agent_session.event_stream.subscribe(
-            EventStreamSubscriber.SERVER, self.on_event
+            EventStreamSubscriber.SERVER, self.on_event, str(uuid4())
         )
         self.config = config
         self.loop = asyncio.get_event_loop()
@@ -181,8 +182,7 @@ class SocketIOSession:
                 max_iterations=max_iterations,
                 max_budget_per_task=self.config.max_budget_per_task,
                 agent_to_llm_config=self.config.get_agent_to_llm_config_map(),
-                agent_configs=self.config.get_agent_configs(),
-                status_message_callback=self.queue_status_message,
+                agent_configs=self.config.get_agent_configs()
             )
         except Exception as e:
             logger.exception(f'Error creating controller: {e}')
