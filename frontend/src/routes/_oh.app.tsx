@@ -50,6 +50,7 @@ import { clearSession } from "#/utils/clear-session";
 import { userIsAuthenticated } from "#/utils/user-is-authenticated";
 import { ErrorObservation } from "#/types/core/observations";
 import { ChatInterface } from "#/components/chat-interface";
+import EventLogger from "#/utils/event-logger";
 
 interface ServerError {
   error: boolean | string;
@@ -97,7 +98,7 @@ export const clientLoader = async () => {
     const data = await retrieveLatestGitHubCommit(ghToken, repo);
     if (isGitHubErrorReponse(data)) {
       // TODO: Handle error
-      console.error("Failed to retrieve latest commit", data);
+      EventLogger.error(`Failed to retrieve latest commit: ${data}`);
     } else {
       [lastCommit] = data;
     }
@@ -183,55 +184,46 @@ function App() {
     if (q) addIntialQueryToChat(q, files);
   }, [settings]);
 
-  const handleError = (message: string) => {
-    const [error, ...rest] = message.split(":");
-    const details = rest.join(":");
-    if (!details) {
-      dispatch(
-        addErrorMessage({
-          error: "An error has occured",
-          message: error,
-        }),
-      );
-    } else {
-      dispatch(addErrorMessage({ error, message: details }));
-    }
-  };
-
   const handleMessage = React.useCallback(
-    (data: any) => {
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    (message: any) => {
       // set token received from the server
-      if ("token" in data) {
-        fetcher.submit({ token: data.token }, { method: "post" });
+      if ("token" in message) {
+        fetcher.submit({ token: message.token }, { method: "post" });
         return;
       }
 
-      if (isServerError(data)) {
-        if (data.error_code === 401) {
+      if (isServerError(message)) {
+        if (message.error_code === 401) {
           toast.error("Session expired.");
           fetcher.submit({}, { method: "POST", action: "/end-session" });
           return;
         }
 
-        if (typeof data.error === "string") {
-          toast.error(data.error);
+        if (typeof message.error === "string") {
+          toast.error(message.error);
         } else {
-          toast.error(data.message);
+          toast.error(message.message);
         }
 
         return;
       }
-      if (isErrorObservation(data)) {
-        handleError(data.message);
+      if (isErrorObservation(message)) {
+        dispatch(
+          addErrorMessage({
+            id: message.extras?.error_id,
+            message: message.message,
+          }),
+        );
         return;
       }
 
-      handleAssistantMessage(data);
+      handleAssistantMessage(message);
 
       // handle first time connection
       if (
-        isAgentStateChange(data) &&
-        data.extras.agent_state === AgentState.INIT
+        isAgentStateChange(message) &&
+        message.extras.agent_state === AgentState.INIT
       ) {
         setRuntimeIsInitialized();
 

@@ -1,4 +1,8 @@
-import { addAssistantMessage, addUserMessage } from "#/state/chatSlice";
+import {
+  addAssistantMessage,
+  addUserMessage,
+  addErrorMessage,
+} from "#/state/chatSlice";
 import { setCode, setActiveFilepath } from "#/state/codeSlice";
 import { appendJupyterInput } from "#/state/jupyterSlice";
 import {
@@ -10,6 +14,7 @@ import store from "#/store";
 import ActionType from "#/types/ActionType";
 import { ActionMessage, StatusMessage } from "#/types/Message";
 import { SocketMessage } from "#/types/ResponseType";
+import EventLogger from "#/utils/event-logger";
 import { handleObservationMessage } from "./observations";
 
 const messageActions = {
@@ -119,13 +124,19 @@ export function handleActionMessage(message: ActionMessage) {
 }
 
 export function handleStatusMessage(message: StatusMessage) {
-  const msg = message.status == null ? "" : message.status.trim();
-  store.dispatch(
-    setCurStatusMessage({
-      ...message,
-      status: msg,
-    }),
-  );
+  if (message.type === "info") {
+    store.dispatch(
+      setCurStatusMessage({
+        ...message,
+      }),
+    );
+  } else if (message.type === "error") {
+    store.dispatch(
+      addErrorMessage({
+        ...message,
+      }),
+    );
+  }
 }
 
 export function handleAssistantMessage(data: string | SocketMessage) {
@@ -139,9 +150,11 @@ export function handleAssistantMessage(data: string | SocketMessage) {
 
   if ("action" in socketMessage) {
     handleActionMessage(socketMessage);
-  } else if ("status" in socketMessage) {
+  } else if ("observation" in socketMessage) {
+    handleObservationMessage(socketMessage);
+  } else if ("status_update" in socketMessage) {
     handleStatusMessage(socketMessage);
   } else {
-    handleObservationMessage(socketMessage);
+    EventLogger.error(`Unknown message type: ${socketMessage}`);
   }
 }
