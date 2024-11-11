@@ -1,0 +1,3 @@
+[submodule "apps_to_strip_features_from/cofounder"]
+	path = apps_to_strip_features_from/cofounder
+	url = https://github.com/raidendotai/cofounder/tree/main
