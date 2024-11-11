@@ -66,6 +66,7 @@ from openhands.runtime.base import Runtime
 from openhands.server.auth.auth import get_sid_from_token, sign_token
 from openhands.server.middleware import LocalhostCORSMiddleware, NoCacheMiddleware
 from openhands.server.session import SessionManager
+from openhands.server.blueprint import router as blueprint_router
 
 load_dotenv()
 
@@ -94,6 +95,7 @@ app.add_middleware(NoCacheMiddleware)
 
 security_scheme = HTTPBearer()
 
+app.include_router(blueprint_router)
 
 def load_file_upload_config() -> tuple[int, bool, list[str]]:
     """Load file upload configuration from the config object.

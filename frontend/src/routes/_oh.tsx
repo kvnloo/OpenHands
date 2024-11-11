@@ -33,6 +33,7 @@ import { WaitlistModal } from "#/components/waitlist-modal";
 import { AnalyticsConsentFormModal } from "#/components/analytics-consent-form-modal";
 import { setCurrentAgentState } from "#/state/agentSlice";
 import AgentState from "#/types/AgentState";
+import { Link } from "react-router-dom";
 
 export const clientLoader = async ({ request }: ClientLoaderFunctionArgs) => {
   try {
@@ -295,6 +296,9 @@ export default function MainApp() {
               <NewProjectIcon width={28} height={28} />
             </button>
           )}
+          <Link to="/blueprint" className="w-8 h-8 rounded-full hover:opacity-80 flex items-center justify-center" aria-label="Blueprint">
+            <span>Blueprint</span>
+          </Link>
         </nav>
       </aside>
       <div className="h-full w-full relative">

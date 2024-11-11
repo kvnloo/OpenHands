@@ -49,6 +49,7 @@ import { clearJupyter } from "#/state/jupyterSlice";
 import { FilesProvider } from "#/context/files";
 import { ErrorObservation } from "#/types/core/observations";
 import { ChatInterface } from "#/components/chat-interface";
+import { Link } from "react-router-dom";
 
 interface ServerError {
   error: boolean | string;
@@ -309,6 +310,7 @@ function App() {
                 icon: <GlobeIcon />,
                 isBeta: true,
               },
+              { label: "Blueprint", to: "blueprint", icon: <ListIcon /> },
             ]}
           >
             <FilesProvider>
