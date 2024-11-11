@@ -69,6 +69,12 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
 RUN curl -fsSL https://install.python-poetry.org | python3.12 - \
     && ln -s ~/.local/bin/poetry /usr/local/bin/poetry
 
+# Add Unity installation commands here
+RUN apt-get update && apt-get install -y \
+    unity \
+    unity-editor \
+    && rm -rf /var/lib/apt/lists/*
+
 #
 RUN <<EOF
 #!/bin/bash

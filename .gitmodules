@@ -4,3 +4,9 @@
 [submodule "apps_to_strip_features_from/ChatDev"]
 	path = apps_to_strip_features_from/ChatDev
 	url = https://github.com/OpenBMB/ChatDev.git
+[submodule "apps_to_strip_features_from/Eureka"]
+	path = apps_to_strip_features_from/Eureka
+	url = git@github.com:eureka-research/Eureka.git
+[submodule "apps_to_strip_features_from/Voyager"]
+	path = apps_to_strip_features_from/Voyager
+	url = git@github.com:MineDojo/Voyager.git
