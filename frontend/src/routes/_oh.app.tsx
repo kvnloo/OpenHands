@@ -311,6 +311,7 @@ function App() {
                 isBeta: true,
               },
               { label: "Blueprint", to: "blueprint", icon: <ListIcon /> },
+              { label: "Curriculum & Skills", to: "curriculum-skills", icon: <ListIcon /> },
             ]}
           >
             <FilesProvider>

@@ -45,7 +45,8 @@ ENV SANDBOX_USER_ID=0
 RUN mkdir -p $WORKSPACE_BASE
 
 RUN apt-get update -y \
-    && apt-get install -y curl ssh sudo
+    && apt-get install -y curl ssh sudo \
+    && apt-get install -y x11-apps libx11-dev
 
 # Default is 1000, but OSX is often 501
 RUN sed -i 's/^UID_MIN.*/UID_MIN 499/' /etc/login.defs
@@ -63,7 +64,8 @@ USER openhands
 
 ENV VIRTUAL_ENV=/app/.venv \
     PATH="/app/.venv/bin:$PATH" \
-    PYTHONPATH='/app'
+    PYTHONPATH='/app' \
+    DISPLAY=host.docker.internal:0
 
 COPY --chown=openhands:app --chmod=770 --from=backend-builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 RUN playwright install --with-deps chromium

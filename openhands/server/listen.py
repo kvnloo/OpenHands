@@ -68,6 +68,10 @@ from openhands.server.middleware import LocalhostCORSMiddleware, NoCacheMiddlewa
 from openhands.server.session import SessionManager
 from openhands.server.blueprint import router as blueprint_router
 
+# Import CurriculumAgent and SkillManager
+from apps_to_strip_features_from.Voyager.voyager.agents.curriculum import CurriculumAgent
+from apps_to_strip_features_from.Voyager.voyager.agents.skill import SkillManager
+
 load_dotenv()
 
 config = load_app_config()
@@ -912,3 +916,40 @@ class SPAStaticFiles(StaticFiles):
 
 
 app.mount('/', SPAStaticFiles(directory='./frontend/build', html=True), name='dist')
+
+# New API endpoints for automatic curriculum and skill library
+@app.get('/api/automatic-curriculum')
+async def get_automatic_curriculum():
+    # Initialize CurriculumAgent
+    curriculum_agent = CurriculumAgent()
+    # Example of generating a task
+    task, context = curriculum_agent.propose_next_task(events=[], chest_observation="")
+    return JSONResponse(status_code=200, content={"task": task, "context": context})
+
+@app.get('/api/skill-library')
+async def get_skill_library():
+    # Initialize SkillManager
+    skill_manager = SkillManager()
+    # Example of retrieving skills
+    skills = skill_manager.retrieve_skills(query="example query")
+    return JSONResponse(status_code=200, content={"skills": skills})
+
+@app.post('/api/skill-library/add')
+async def add_skill(request: Request):
+    # Initialize SkillManager
+    skill_manager = SkillManager()
+    data = await request.json()
+    skill_info = {
+        "task": data.get("task"),
+        "program_name": data.get("program_name"),
+        "program_code": data.get("program_code"),
+    }
+    skill_manager.add_new_skill(skill_info)
+    return JSONResponse(status_code=200, content={"message": "Skill added successfully"})
+
+@app.get('/api/skill-library/programs')
+async def get_programs():
+    # Initialize SkillManager
+    skill_manager = SkillManager()
+    programs = skill_manager.programs
+    return JSONResponse(status_code=200, content={"programs": programs})
