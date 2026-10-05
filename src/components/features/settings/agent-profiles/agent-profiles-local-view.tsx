@@ -61,6 +61,8 @@ function toAgentSettingsOverride(
     tools: (profile.tools as SettingsValue) ?? null,
     tool_concurrency_limit: profile.tool_concurrency_limit,
     secret_refs: secretRefs,
+    persona: profile.persona ?? null,
+    system_message_suffix: profile.system_message_suffix ?? null,
   };
 }
 

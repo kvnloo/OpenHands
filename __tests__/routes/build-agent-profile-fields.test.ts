@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentProfileFields } from "#/routes/agent-settings";
+import {
+  buildAgentProfileFields,
+  readSystemPromptSeed,
+} from "#/routes/agent-settings";
 import type { SettingsFieldSchema } from "#/types/settings";
 
 const baseAcp = {
@@ -15,6 +18,9 @@ const baseAcp = {
   secretsMode: "standard" as const,
   selectedSecrets: [] as string[],
   secretRefsSupportedOnProfile: true,
+  systemPromptMode: "standard" as const,
+  systemPromptText: "",
+  systemPromptEditable: false,
   toolsMode: "standard" as const,
   selectedTools: [] as string[],
   toolParams: {},
@@ -98,6 +104,9 @@ describe("buildAgentProfileFields — OpenHands", () => {
     secretsMode: "standard" as const,
     selectedSecrets: [] as string[],
     secretRefsSupportedOnProfile: true,
+    systemPromptMode: "standard" as const,
+    systemPromptText: "",
+    systemPromptEditable: false,
   };
 
   it("leaves tools out until the catalog loads, so the stored selection survives", () => {
@@ -176,6 +185,9 @@ describe("buildAgentProfileFields — mcp_server_refs", () => {
     secretsMode: "standard" as const,
     selectedSecrets: [] as string[],
     secretRefsSupportedOnProfile: true,
+    systemPromptMode: "standard" as const,
+    systemPromptText: "",
+    systemPromptEditable: false,
   };
 
   it("emits null in standard mode, so the profile inherits every server", () => {
@@ -226,6 +238,9 @@ describe("buildAgentProfileFields — secret scope", () => {
     secretsMode: "standard" as const,
     selectedSecrets: [] as string[],
     secretRefsSupportedOnProfile: true,
+    systemPromptMode: "standard" as const,
+    systemPromptText: "",
+    systemPromptEditable: false,
     mcpMode: "standard" as const,
     selectedMcpServers: [] as string[],
     toolsMode: "standard" as const,
@@ -276,6 +291,102 @@ describe("buildAgentProfileFields — secret scope", () => {
       secretRefsSupportedOnProfile: false,
     });
     expect(fields).not.toHaveProperty("secret_refs");
+  });
+});
+
+describe("buildAgentProfileFields — system prompt", () => {
+  const base = {
+    isAcp: false,
+    selectedPreset: "custom",
+    isDefaultProviderCommand: false,
+    commandTokens: [] as string[],
+    acpModel: "",
+    toolConcurrencyField: undefined,
+    toolConcurrency: "",
+    mcpMode: "standard" as const,
+    selectedMcpServers: [] as string[],
+    secretsMode: "standard" as const,
+    selectedSecrets: [] as string[],
+    secretRefsSupportedOnProfile: false,
+    systemPromptMode: "custom" as const,
+    systemPromptText: "You triage issues.",
+    systemPromptEditable: true,
+  };
+
+  it("a custom prompt saves persona and clears the instructions", () => {
+    expect(buildAgentProfileFields(base)).toMatchObject({
+      persona: "You triage issues.",
+      system_message_suffix: null,
+    });
+  });
+
+  it("instructions save system_message_suffix and clear the persona", () => {
+    expect(
+      buildAgentProfileFields({ ...base, systemPromptMode: "append" }),
+    ).toMatchObject({
+      persona: null,
+      system_message_suffix: "You triage issues.",
+    });
+  });
+
+  it("the OpenHands default clears both, even with leftover text", () => {
+    expect(
+      buildAgentProfileFields({ ...base, systemPromptMode: "standard" }),
+    ).toMatchObject({ persona: null, system_message_suffix: null });
+  });
+
+  it.each(["custom", "append"] as const)(
+    "a blank %s text clears both",
+    (mode) => {
+      expect(
+        buildAgentProfileFields({
+          ...base,
+          systemPromptMode: mode,
+          systemPromptText: "  \n ",
+        }),
+      ).toMatchObject({ persona: null, system_message_suffix: null });
+    },
+  );
+
+  it("omits both keys when the section is hidden", () => {
+    const fields = buildAgentProfileFields({
+      ...base,
+      systemPromptEditable: false,
+    });
+    expect(fields).not.toHaveProperty("persona");
+    expect(fields).not.toHaveProperty("system_message_suffix");
+  });
+
+  it("never rides the ACP variant", () => {
+    const fields = buildAgentProfileFields({
+      ...base,
+      isAcp: true,
+      selectedPreset: "claude-code",
+      commandTokens: ["npx", "claude-code-acp"],
+    });
+    expect(fields).not.toHaveProperty("persona");
+    expect(fields).not.toHaveProperty("system_message_suffix");
+  });
+});
+
+describe("readSystemPromptSeed", () => {
+  it.each([
+    [null, { mode: "standard", text: "" }],
+    [
+      { system_message_suffix: "Be terse." },
+      { mode: "append", text: "Be terse." },
+    ],
+    [{ persona: "You triage." }, { mode: "custom", text: "You triage." }],
+    [
+      { persona: "You triage.", system_message_suffix: "Be terse." },
+      { mode: "custom", text: "You triage." },
+    ],
+    [
+      { persona: null, system_message_suffix: "" },
+      { mode: "standard", text: "" },
+    ],
+  ])("%j opens as %j", (override, expected) => {
+    expect(readSystemPromptSeed(override)).toEqual(expected);
   });
 });
 

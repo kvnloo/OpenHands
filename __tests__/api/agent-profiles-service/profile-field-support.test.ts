@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  agentProfileSupportsInstructions,
   agentProfileSupportsSecretRefs,
   agentProfileSupportsTools,
 } from "#/api/agent-profiles-service/profile-field-support";
@@ -12,6 +13,7 @@ vi.mock("#/api/backend-registry/active-store", () => ({
 
 describe.each([
   ["agentProfileSupportsSecretRefs", agentProfileSupportsSecretRefs],
+  ["agentProfileSupportsInstructions", agentProfileSupportsInstructions],
   ["agentProfileSupportsTools", agentProfileSupportsTools],
 ])("%s", (_name, supports) => {
   it("is offered on a local backend", () => {

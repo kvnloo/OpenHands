@@ -17,6 +17,8 @@ import {
 import { ProfileScopeList } from "#/components/features/settings/agent-profiles/profile-scope-list";
 import { Typography } from "#/ui/typography";
 import { I18nKey } from "#/i18n/declaration";
+import { formControlMultilineFieldClassName } from "#/utils/form-control-classes";
+import { cn } from "#/utils/utils";
 import { SettingsFieldSchema, SettingsValue } from "#/types/settings";
 import {
   coerceFieldValue,
@@ -41,6 +43,7 @@ import { flattenMcpConfig } from "#/utils/mcp-installed-servers";
 import { parseMcpConfig } from "#/utils/mcp-config";
 import {
   agentProfileSupportsSecretRefs,
+  agentProfileSupportsInstructions,
   agentProfileSupportsTools,
 } from "#/api/agent-profiles-service/profile-field-support";
 import { useSearchSecrets } from "#/hooks/query/use-get-secrets";
@@ -60,6 +63,9 @@ const TOOL_CONCURRENCY_FIELD_KEY = "tool_concurrency_limit";
 const MCP_SERVER_REFS_KEY = "mcp_server_refs";
 const SECRET_REFS_KEY = "secret_refs";
 const TOOLS_KEY = "tools";
+const PERSONA_KEY = "persona";
+const SYSTEM_MESSAGE_SUFFIX_KEY = "system_message_suffix";
+const SYSTEM_PROMPT_MAX_LENGTH = 65536;
 const COMMAND_PLACEHOLDER_FALLBACK = "npx -y <package-name>";
 const ACP_CUSTOM_MODEL_KEY = "__custom_model__";
 const EMPTY_AGENT_SETTINGS_SNAPSHOT: AgentSettingsSnapshot = {
@@ -88,6 +94,21 @@ function detectPreset(
   return ACP_CUSTOM_PRESET_KEY;
 }
 
+export type SystemPromptMode = "standard" | "append" | "custom";
+
+/** A stored persona wins over stored instructions; the editor models one choice. */
+export function readSystemPromptSeed(
+  override: Record<string, SettingsValue> | null | undefined,
+): { mode: SystemPromptMode; text: string } {
+  const persona = override?.[PERSONA_KEY];
+  if (typeof persona === "string" && persona)
+    return { mode: "custom", text: persona };
+  const suffix = override?.[SYSTEM_MESSAGE_SUFFIX_KEY];
+  if (typeof suffix === "string" && suffix)
+    return { mode: "append", text: suffix };
+  return { mode: "standard", text: "" };
+}
+
 function isKnownAcpModel(
   provider: ACPProviderConfig | undefined,
   model: string,
@@ -108,6 +129,8 @@ export type AgentProfileFieldsDraft =
       tool_concurrency_limit?: number;
       secret_refs?: string[] | null;
       tools?: ProfileToolSpec[] | null;
+      persona?: string | null;
+      system_message_suffix?: string | null;
     }
   | {
       agent_kind: "acp";
@@ -142,6 +165,10 @@ export interface AgentProfileFieldsInput {
   toolParams?: Record<string, Record<string, SettingsValue>>;
   /** Whether the tool catalog loaded; `tools` is only written then. */
   toolCatalogLoaded?: boolean;
+  systemPromptMode: SystemPromptMode;
+  systemPromptText: string;
+  /** False when the section is hidden, so neither prompt field is written. */
+  systemPromptEditable: boolean;
 }
 
 /**
@@ -182,6 +209,9 @@ export function buildAgentProfileFields(
     selectedTools = [],
     toolParams = {},
     toolCatalogLoaded = false,
+    systemPromptMode,
+    systemPromptText,
+    systemPromptEditable,
   } = input;
   // Both are base-model fields, so they ride both variants. `mcp_server_refs`
   // needs no version gate — it has existed since agent profiles shipped, below
@@ -213,6 +243,11 @@ export function buildAgentProfileFields(
       ...mcpRefs,
       ...secretRefs,
     };
+  if (systemPromptEditable) {
+    const text = systemPromptText.trim() ? systemPromptText : null;
+    fields.system_message_suffix = systemPromptMode === "append" ? text : null;
+    fields.persona = systemPromptMode === "custom" ? text : null;
+  }
   if (toolCatalogLoaded) {
     fields.tools = buildProfileToolsValue({
       mode: toolsMode,
@@ -264,7 +299,7 @@ interface AgentSettingsScreenProps {
   /** `agent_settings`-shaped profile fields the form opens on. */
   agentSettingsOverride?: Record<string, SettingsValue> | null;
   onSaveControlChange: (control: AgentSettingsSaveControl) => void;
-  /** Local launches route the `default` profile around its stored tools. */
+  /** Local launches route the `default` profile around its stored prompt and tools. */
   isDefaultProfile?: boolean;
 }
 
@@ -352,6 +387,20 @@ export function AgentSettingsScreen({
         .map(({ name }) => name)
         .filter((name) => selectedTools?.includes(name)),
     [toolPickerCatalog, selectedTools],
+  );
+
+  // --- System prompt (OpenHands path) ---
+  const instructionsSupported = agentProfileSupportsInstructions();
+  const showSystemPrompt = instructionsSupported && !isDefaultProfile;
+  const initialSystemPrompt = React.useMemo(
+    () => readSystemPromptSeed(agentSettingsOverride),
+    [agentSettingsOverride],
+  );
+  const [systemPromptMode, setSystemPromptMode] = useState<SystemPromptMode>(
+    initialSystemPrompt.mode,
+  );
+  const [systemPromptText, setSystemPromptText] = useState(
+    initialSystemPrompt.text,
   );
 
   // --- MCP servers (both variants; a base-model field) ---
@@ -546,6 +595,11 @@ export function AgentSettingsScreen({
     setToolConcurrency(initialToolConcurrency);
   }, [initialToolConcurrency]);
 
+  useEffect(() => {
+    setSystemPromptMode(initialSystemPrompt.mode);
+    setSystemPromptText(initialSystemPrompt.text);
+  }, [initialSystemPrompt]);
+
   // Sync the MCP scope when settings reload
   useEffect(() => {
     setMcpMode(initialMcpRefs.mode);
@@ -613,6 +667,16 @@ export function AgentSettingsScreen({
     toolsMode !== initialTools.mode ||
     (toolsMode === "custom" &&
       !sameScopeSelection(orderedSelectedTools, initialTools.selected));
+  const systemPromptDirty =
+    showSystemPrompt &&
+    (systemPromptMode !== initialSystemPrompt.mode ||
+      (systemPromptMode !== "standard" &&
+        systemPromptText !== initialSystemPrompt.text));
+  const systemPromptMissing =
+    agentType === "openhands" &&
+    showSystemPrompt &&
+    systemPromptMode !== "standard" &&
+    !systemPromptText.trim();
   const settingsDirty =
     agentType !== loadedSnapshot.agentType ||
     mcpScopeDirty ||
@@ -622,7 +686,7 @@ export function AgentSettingsScreen({
       ? commandText !== loadedSnapshot.commandText ||
         acpModel !== loadedSnapshot.acpModel ||
         isCustomAcpModel !== loadedSnapshot.isCustomAcpModel
-      : toolConcurrency !== initialToolConcurrency);
+      : toolConcurrency !== initialToolConcurrency || systemPromptDirty);
   const credentialsDirty = acpCredentialForm.isDirty;
   const isAnyDirty = settingsDirty || credentialsDirty;
   const customToolsUninitialized =
@@ -630,10 +694,12 @@ export function AgentSettingsScreen({
     agentType === "openhands" &&
     toolsMode === "custom" &&
     selectedTools === null;
+  const isFormValid =
+    !acpCommandEmpty && !systemPromptMissing && !customToolsUninitialized;
   useEffect(() => {
     onSaveControlChange({
       agentType,
-      isValid: !acpCommandEmpty && !customToolsUninitialized,
+      isValid: isFormValid,
       isDirty: isAnyDirty,
       buildAgentProfileFields: stableBuildFields,
       credentials: {
@@ -645,8 +711,7 @@ export function AgentSettingsScreen({
   }, [
     onSaveControlChange,
     agentType,
-    acpCommandEmpty,
-    customToolsUninitialized,
+    isFormValid,
     isAnyDirty,
     credentialsDirty,
     stableBuildFields,
@@ -696,6 +761,9 @@ export function AgentSettingsScreen({
       selectedTools: orderedSelectedTools,
       toolParams: initialTools.params,
       toolCatalogLoaded,
+      systemPromptMode,
+      systemPromptText,
+      systemPromptEditable: showSystemPrompt,
     });
 
   const isSaving = acpCredentialForm.isSaving;
@@ -740,6 +808,98 @@ export function AgentSettingsScreen({
           }
         }}
       />
+
+      {!isAcp && instructionsSupported ? (
+        <div className="flex flex-col gap-2.5">
+          <Typography.Text className="text-sm">
+            {t(I18nKey.SETTINGS$AGENT_PROFILE_SYSTEM_PROMPT)}
+          </Typography.Text>
+          {isDefaultProfile ? (
+            <Typography.Text
+              testId="agent-settings-system-prompt-default-profile"
+              className="text-xs text-tertiary-alt"
+            >
+              {t(I18nKey.SETTINGS$AGENT_PROFILE_SYSTEM_PROMPT_DEFAULT_PROFILE)}
+            </Typography.Text>
+          ) : (
+            <>
+              <SettingsDropdownInput
+                testId="agent-settings-system-prompt-mode"
+                name="agent-system-prompt-mode"
+                label=""
+                items={[
+                  {
+                    key: "standard",
+                    label: t(
+                      I18nKey.SETTINGS$AGENT_PROFILE_SYSTEM_PROMPT_STANDARD,
+                    ),
+                  },
+                  {
+                    key: "append",
+                    label: t(
+                      I18nKey.SETTINGS$AGENT_PROFILE_SYSTEM_PROMPT_APPEND,
+                    ),
+                  },
+                  {
+                    key: "custom",
+                    label: t(
+                      I18nKey.SETTINGS$AGENT_PROFILE_SYSTEM_PROMPT_CUSTOM,
+                    ),
+                  },
+                ]}
+                selectedKey={systemPromptMode}
+                isDisabled={isSaving}
+                onSelectionChange={(key) => {
+                  if (key) setSystemPromptMode(key as SystemPromptMode);
+                }}
+              />
+              {systemPromptMode !== "standard" ? (
+                <textarea
+                  data-testid="agent-settings-system-prompt"
+                  aria-label={t(I18nKey.SETTINGS$AGENT_PROFILE_SYSTEM_PROMPT)}
+                  className={cn(
+                    formControlMultilineFieldClassName,
+                    "min-h-48 font-mono placeholder:italic",
+                    "disabled:bg-surface-raised disabled:border-border-subtle",
+                  )}
+                  value={systemPromptText}
+                  maxLength={SYSTEM_PROMPT_MAX_LENGTH}
+                  placeholder={t(
+                    systemPromptMode === "custom"
+                      ? I18nKey.SETTINGS$AGENT_PROFILE_SYSTEM_PROMPT_PLACEHOLDER
+                      : I18nKey.SETTINGS$AGENT_PROFILE_SYSTEM_PROMPT_APPEND_PLACEHOLDER,
+                  )}
+                  disabled={isSaving}
+                  onChange={(e) => setSystemPromptText(e.target.value)}
+                />
+              ) : null}
+              {systemPromptMissing ? (
+                <Typography.Text
+                  testId="agent-settings-system-prompt-required"
+                  className="text-xs text-danger"
+                >
+                  {t(I18nKey.SETTINGS$AGENT_PROFILE_SYSTEM_PROMPT_REQUIRED)}
+                </Typography.Text>
+              ) : null}
+              <Typography.Text
+                testId="agent-settings-system-prompt-hint"
+                className="text-xs text-tertiary-alt"
+              >
+                {t(
+                  {
+                    standard:
+                      I18nKey.SETTINGS$AGENT_PROFILE_SYSTEM_PROMPT_STANDARD_HINT,
+                    append:
+                      I18nKey.SETTINGS$AGENT_PROFILE_SYSTEM_PROMPT_APPEND_HINT,
+                    custom:
+                      I18nKey.SETTINGS$AGENT_PROFILE_SYSTEM_PROMPT_CUSTOM_HINT,
+                  }[systemPromptMode],
+                )}
+              </Typography.Text>
+            </>
+          )}
+        </div>
+      ) : null}
 
       {!isAcp && toolConcurrencyField ? (
         <SchemaField
