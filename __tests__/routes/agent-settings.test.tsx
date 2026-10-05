@@ -24,14 +24,10 @@ vi.mock("#/hooks/query/use-acp-auth-status", () => ({
   useAcpAuthStatus: (...args: unknown[]) => acpAuthStatusMock(...args),
 }));
 
-// The LLM-switching toggle is gated on the backend's *profile* model, which
-// gained the field later than the settings schema did. Stub the probe so both
-// sides of that gate are reachable without a live server.
-const profileSupportsSwitchLlmToolMock = vi.hoisted(() => vi.fn(() => true));
 const profileSupportsSecretRefsMock = vi.hoisted(() => vi.fn(() => true));
 vi.mock("#/api/agent-profiles-service/profile-field-support", () => ({
-  agentProfileSupportsSwitchLlmTool: () => profileSupportsSwitchLlmToolMock(),
   agentProfileSupportsSecretRefs: () => profileSupportsSecretRefsMock(),
+  agentProfileSupportsTools: () => true,
 }));
 
 // The secret picker lists the user's saved secrets; stub the query so these
@@ -115,115 +111,12 @@ describe("AgentSettingsScreen", () => {
     toastMocks.success.mockClear();
     toastMocks.error.mockClear();
     toastMocks.warning.mockClear();
-    profileSupportsSwitchLlmToolMock.mockReturnValue(true);
     profileSupportsSecretRefsMock.mockReturnValue(true);
     savedSecretsMock.mockReturnValue([
       { name: "GITHUB_TOKEN", description: "repo access" },
       { name: "DATADOG_API_KEY" },
       { name: "PROD_DB_URL" },
     ]);
-  });
-
-  it("renders the agent type selector defaulting to OpenHands with sub-agents toggle", async () => {
-    renderAgentSettingsScreen({
-      agentSettingsOverride: { agent_kind: "openhands" },
-    });
-    await screen.findByTestId("agent-settings-screen");
-
-    expect(screen.getByLabelText("SETTINGS$NAV_AGENT")).toHaveValue(
-      "SETTINGS$AGENT_TYPE_OPENHANDS",
-    );
-    expect(
-      screen.getByTestId("agent-settings-enable-sub-agents"),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId("agent-command-input")).not.toBeInTheDocument();
-  });
-
-  it("builds enable_sub_agents from its toggle", async () => {
-    const user = userEvent.setup();
-    const { control } = renderAgentSettingsScreen({
-      agentSettingsOverride: {
-        agent_kind: "openhands",
-        enable_sub_agents: false,
-      },
-    });
-    await screen.findByTestId("agent-settings-screen");
-
-    const toggle = screen.getByTestId("agent-settings-enable-sub-agents");
-    await user.click(toggle.closest("label")!);
-
-    expect(control().buildAgentProfileFields()).toMatchObject({
-      enable_sub_agents: true,
-    });
-  });
-
-  it("builds enable_switch_llm_tool from its toggle", async () => {
-    const user = userEvent.setup();
-    const { control } = renderAgentSettingsScreen({
-      agentSettingsOverride: {
-        agent_kind: "openhands",
-        enable_switch_llm_tool: true,
-      },
-    });
-    await screen.findByTestId("agent-settings-screen");
-
-    const toggle = screen.getByTestId("agent-settings-enable-switch-llm-tool");
-    expect(toggle).toBeChecked();
-    await user.click(toggle.closest("label")!);
-
-    expect(toggle).not.toBeChecked();
-    expect(control().buildAgentProfileFields()).toMatchObject({
-      enable_switch_llm_tool: false,
-    });
-  });
-
-  it("hides the LLM-switching toggle when the schema predates the field", async () => {
-    const schema = MOCK_DEFAULT_USER_SETTINGS.agent_settings_schema;
-    const schemaWithoutField = schema && {
-      ...schema,
-      sections: schema.sections.map((section) => ({
-        ...section,
-        fields: section.fields.filter(
-          (field) => field.key !== "enable_switch_llm_tool",
-        ),
-      })),
-    };
-    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
-      buildSettings({ agent_settings_schema: schemaWithoutField }),
-    );
-
-    renderAgentSettingsScreen({
-      agentSettingsOverride: { agent_kind: "openhands" },
-    });
-    await screen.findByTestId("agent-settings-screen");
-
-    // Older agent-servers without the field hide the toggle cleanly...
-    expect(
-      screen.queryByTestId("agent-settings-enable-switch-llm-tool"),
-    ).not.toBeInTheDocument();
-    // ...while the other OpenHands controls still render.
-    expect(
-      screen.getByTestId("agent-settings-enable-sub-agents"),
-    ).toBeInTheDocument();
-  });
-
-  it("hides the LLM-switching toggle when the profile model predates the field", async () => {
-    // agent-server 1.29.0–1.30.x advertises the field in the settings schema
-    // while `OpenHandsAgentProfile` still rejects it. Rendering the toggle
-    // there would offer a control whose save the server refuses outright.
-    profileSupportsSwitchLlmToolMock.mockReturnValue(false);
-
-    renderAgentSettingsScreen({
-      agentSettingsOverride: { agent_kind: "openhands" },
-    });
-    await screen.findByTestId("agent-settings-screen");
-
-    expect(
-      screen.queryByTestId("agent-settings-enable-switch-llm-tool"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByTestId("agent-settings-enable-sub-agents"),
-    ).toBeInTheDocument();
   });
 
   it("builds tool_concurrency_limit from the input on the OpenHands path", async () => {
@@ -245,27 +138,6 @@ describe("AgentSettingsScreen", () => {
     expect(control().buildAgentProfileFields()).toMatchObject({
       tool_concurrency_limit: 4,
     });
-  });
-
-  it("hides the sub-agents toggle when ACP is selected", async () => {
-    const user = userEvent.setup();
-    renderAgentSettingsScreen({
-      agentSettingsOverride: { agent_kind: "openhands" },
-    });
-    await screen.findByTestId("agent-settings-screen");
-    expect(
-      screen.getByTestId("agent-settings-enable-sub-agents"),
-    ).toBeInTheDocument();
-
-    await user.click(screen.getByTestId("agent-type-selector"));
-    await user.click(
-      await screen.findByRole("option", { name: "SETTINGS$AGENT_TYPE_ACP" }),
-    );
-
-    expect(
-      screen.queryByTestId("agent-settings-enable-sub-agents"),
-    ).not.toBeInTheDocument();
-    expect(screen.getByTestId("agent-command-input")).toBeInTheDocument();
   });
 
   it("opens a stored ACP profile on its command and custom model", async () => {
@@ -413,8 +285,7 @@ describe("AgentSettingsScreen", () => {
       agent_kind: "openhands",
       mcp_server_refs: null,
       secret_refs: null,
-      enable_sub_agents: false,
-      enable_switch_llm_tool: true,
+      tools: null,
       tool_concurrency_limit: 1,
     });
   });
@@ -595,7 +466,6 @@ describe("AgentSettingsScreen — MCP server scope", () => {
     renderAgentSettingsScreen({
       agentSettingsOverride: {
         agent_kind: "openhands",
-        enable_sub_agents: false,
         mcp_server_refs: null,
       },
       onSaveControlChange: (next) => {
@@ -618,7 +488,6 @@ describe("AgentSettingsScreen — MCP server scope", () => {
     renderAgentSettingsScreen({
       agentSettingsOverride: {
         agent_kind: "openhands",
-        enable_sub_agents: false,
         mcp_server_refs: ["github"],
       },
       onSaveControlChange: (next) => {
@@ -642,7 +511,6 @@ describe("AgentSettingsScreen — MCP server scope", () => {
     renderAgentSettingsScreen({
       agentSettingsOverride: {
         agent_kind: "openhands",
-        enable_sub_agents: false,
         mcp_server_refs: null,
       },
       onSaveControlChange: (next) => {
@@ -675,7 +543,6 @@ describe("AgentSettingsScreen — MCP server scope", () => {
     renderAgentSettingsScreen({
       agentSettingsOverride: {
         agent_kind: "openhands",
-        enable_sub_agents: false,
         mcp_server_refs: ["github", "deleted-server"],
       },
     });
@@ -716,7 +583,6 @@ describe("AgentSettingsScreen — MCP server scope", () => {
     renderAgentSettingsScreen({
       agentSettingsOverride: {
         agent_kind: "openhands",
-        enable_sub_agents: false,
       },
     });
     await screen.findByTestId("agent-settings-screen");
@@ -751,7 +617,6 @@ describe("AgentSettingsScreen — MCP scope dirty tracking", () => {
     renderAgentSettingsScreen({
       agentSettingsOverride: {
         agent_kind: "openhands",
-        enable_sub_agents: false,
         mcp_server_refs: refs,
       },
       onSaveControlChange: (next) => {
@@ -803,7 +668,6 @@ describe("AgentSettingsScreen — MCP scope dirty tracking", () => {
       renderAgentSettingsScreen({
         agentSettingsOverride: {
           agent_kind: "openhands",
-          enable_sub_agents: false,
           secret_refs: null,
         },
         onSaveControlChange: (next) => {
@@ -832,7 +696,6 @@ describe("AgentSettingsScreen — MCP scope dirty tracking", () => {
       renderAgentSettingsScreen({
         agentSettingsOverride: {
           agent_kind: "openhands",
-          enable_sub_agents: false,
           secret_refs: ["DATADOG_API_KEY"],
         },
         onSaveControlChange: (next) => {
@@ -860,7 +723,6 @@ describe("AgentSettingsScreen — MCP scope dirty tracking", () => {
       renderAgentSettingsScreen({
         agentSettingsOverride: {
           agent_kind: "openhands",
-          enable_sub_agents: false,
           secret_refs: ["DELETED_SECRET"],
         },
         onSaveControlChange: (next) => {
@@ -1080,7 +942,6 @@ describe("AgentSettingsScreen — MCP scope dirty tracking", () => {
       renderAgentSettingsScreen({
         agentSettingsOverride: {
           agent_kind: "openhands",
-          enable_sub_agents: false,
         },
         onSaveControlChange: (next) => {
           control = next;
@@ -1110,7 +971,6 @@ describe("AgentSettingsScreen — MCP scope dirty tracking", () => {
       renderAgentSettingsScreen({
         agentSettingsOverride: {
           agent_kind: "openhands",
-          enable_sub_agents: false,
         },
         onSaveControlChange: (next) => {
           control = next;
@@ -1132,7 +992,6 @@ describe("AgentSettingsScreen — MCP scope dirty tracking", () => {
       renderAgentSettingsScreen({
         agentSettingsOverride: {
           agent_kind: "openhands",
-          enable_sub_agents: false,
         },
       });
       await screen.findByTestId("agent-settings-screen");
