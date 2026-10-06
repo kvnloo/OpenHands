@@ -735,9 +735,7 @@ describe("ManageBackendsModal", () => {
     );
 
     await user.click(
-      await screen.findByTestId(
-        "manage-backends-reconnect-cloud-login-button",
-      ),
+      await screen.findByTestId("manage-backends-reconnect-cloud-login-button"),
     );
 
     await waitFor(() => {
@@ -786,9 +784,7 @@ describe("ManageBackendsModal", () => {
     );
 
     await user.click(
-      await screen.findByTestId(
-        "manage-backends-reconnect-cloud-login-button",
-      ),
+      await screen.findByTestId("manage-backends-reconnect-cloud-login-button"),
     );
 
     expect(
