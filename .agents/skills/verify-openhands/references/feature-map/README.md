@@ -211,8 +211,8 @@ Maintenance baseline: main@ed815e141409c7b52991ab8d13c553b595da9165 (2026-10-06)
 ## Feature entry contract
 
 Each feature file starts with an H1 title, a short paragraph describing the
-user-visible behavior and a `Source:` line. It then uses exactly four H2 sections
-in this order (`control-openhands map check` enforces it):
+user-visible behavior and a `Source:` line whose paths must exist. It then uses
+exactly four H2 sections in this order (`control-openhands map check` enforces it):
 
 1. `Sub-features`: one bullet per stable ID (`` `Fnn.slug` ``) and behavior.
 2. `How to get to it (user POV)`: every user entry point.
